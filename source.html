@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pendulum Wave</title>
+    <style>
+        body {
+            margin: 0            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+           : flex;
+            justify-content: center;
+           -items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 100;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        label {
+            margin-right: 10px;
+            min-width: 100px;
+            text-align: right;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        .value-display {
+            min-width: 50px;
+            text-align: left;
+            margin-left: 10px;
+        }
+        #toggle-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            z-index: 101;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+    <button id="toggle-btn">⚙️</button>
+    <div id="controls">
+        <div class="control-group">
+            <label for="gravity">Gravity:</label>
+            <input type="range" id="gravity" min="1" max="25" step="0.1" value="9.8">
+            <span id="gravity-value" class="value-display">9.8</span>
+        </div>
+        <div class="control-group">
+            <label for="damping">Damping:</label>
+            <input type="range" id="damping" min="0" max="0.1" step="0.001" value="0.005">
+            <span id="damping-value" class="value-display">0.005</span>
+        </div>
+        <div class="control-group">
+            <label for="pendulums">Pendulums:</label>
+            <input type="range" id="pendulums" min="5" max="50" step="1" value="20">
+            <span id="pendulums-value" class="value-display">20</span>
+        </div>
+        <button id="reset-btn">Reset</button>
+    </div>
+
+    <script>
+        const sketch = (p) => {
+            let pendulums = [];
+            let gravity = 9.8;
+            let damping = 0.005;
+            let pendulumCount = 20;
+            let trailLength = 100;
+            let trails = [];
+            let colors = [];
+            let controlsVisible = true;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            let mouseForce = 0;
+
+            p.setup = () => {
+                let canvas = p.createCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800));
+                canvas.parent('canvas-container');
+                p.colorMode(p.HSB, 360, 100, 100, 1);
+                
+                initializePendulums();
+                setupControls();
+                
+                // Generate color palette
+                for (let i = 0; i < pendulumCount; i++) {
+                    colors.push(p.color(p.map(i, 0, pendulumCount, 0, 360), 80, 90, 0.8));
+                }
+            };
+
+            function initializePendulums() {
+                pendulums = [];
+                trails = [];
+                const spacing = p.width / (pendulumCount + 1);
+                const maxLength = p.height * 0.4;
+                
+                for (let i = 0; i < pendulumCount; i++) {
+                    const x = spacing * (i + 1);
+                    const length = maxLength * (0.5 + 0.5 * (i / pendulumCount));
+                    const angle = p.PI / 4;
+                    
+                    pendulums.push({
+                        x: x,
+                        y: 50,
+                        length: length,
+                        angle: angle,
+                        angularVelocity: 0,
+                        angularAcceleration: 0,
+                        bobX: x + p.sin(angle) * length,
+                        bobY: 50 + p.cos(angle) * length,
+                        trail: []
+                    });
+                    
+                    trails.push([]);
+                }
+            }
+
+            function setupControls() {
+                const gravitySlider = p.select('#gravity');
+                const dampingSlider = p.select('#damping');
+                const pendulumSlider = p.select('#pendulums');
+                const resetBtn = p.select('#reset-btn');
+                const toggleBtn = p.select('#toggle-btn');
+                const controls = p.select('#controls');
+                
+                gravitySlider.input(() => {
+                    gravity = parseFloat(gravitySlider.value());
+                    p.select('#gravity-value').html(gravity.toFixed(1));
+                });
+                
+                dampingSlider.input(() => {
+                    damping = parseFloat(dampingSlider.value());
+                    p.select('#damping-value').html(damping.toFixed(3));
+                });
+                
+                pendulumSlider.input(() => {
+                    pendulumCount = parseInt(pendulumSlider.value());
+                    p.select('#pendulums-value').html(pendulumCount);
+                    initializePendulums();
+                    updateColors();
+                });
+                
+                resetBtn.mousePressed(() => {
+                    initializePendulums();
+                });
+                
+                toggleBtn.mousePressed(() => {
+                    controlsVisible = !controlsVisible;
+                    controls.style('display', controlsVisible ? 'flex' : 'none');
+                });
+            }
+
+            function updateColors() {
+                colors = [];
+                for (let i = 0; i < pendulumCount; i++) {
+                    colors.push(p.color(p.map(i, 0, pendulumCount, 0, 360), 80, 90, 0.8));
+                }
+            }
+
+            p.draw = () => {
+                p.background(0, 0, 10);
+                
+                // Calculate mouse force based on movement
+                const mouseSpeed = p.dist(p.mouseX, p.mouseY, lastMouseX, lastMouseY);
+                mouseForce = p.lerp(mouseForce, p.constrain(mouseSpeed * 0.01, 0, 1), 0.1);
+                lastMouseX = p.mouseX;
+                lastMouseY = p.mouseY;
+                
+                // Update and draw pendulums
+                for (let i = 0; i < pendulums.length; i++) {
+                    const pendulum = pendulums[i];
+                    
+                    // Physics calculations
+                    pendulum.angularAcceleration = (-gravity / pendulum.length) * p.sin(pendulum.angle);
+                    pendulum.angularVelocity += pendulum.angularAcceleration;
+                    pendulum.angularVelocity *= (1 - damping);
+                    pendulum.angle += pendulum.angularVelocity;
+                    
+                    // Apply mouse influence if close
+                    const mouseDist = p.dist(p.mouseX, p.mouseY, pendulum.bobX, pendulum.bobY);
+                    if (mouseDist < 150) {
+                        const influence = p.map(mouseDist, 0, 150, 0.5, 0);
+                        const targetAngle = p.atan2(p.mouseX - pendulum.x, p.mouseY - pendulum.y);
+                        pendulum.angle = p.lerp(pendulum.angle, targetAngle, influence * mouseForce);
+                    }
+                    
+                    // Update bob position
+                    pendulum.bobX = pendulum.x + p.sin(pendulum.angle) * pendulum.length;
+                    pendulum.bobY = pendulum.y + p.cos(pendulum.angle) * pendulum.length;
+                    
+                    // Add to trail
+                    trails[i].push({x: pendulum.bobX, y: pendulum.bobY});
+                    if (trails[i].length > trailLength) {
+                        trails[i].shift();
+                    }
+                    
+                    // Draw trail
+                    p.noFill();
+                    p.beginShape();
+                    for (let j = 0; j < trails[i].length; j++) {
+                        const alpha = p.map(j, 0, trails[i].length, 0.1, 0.8);
+                        p.stroke(colors[i]._getHue(), colors[i]._getSaturation(), colors[i]._getBrightness(), alpha);
+                        p.vertex(trails[i][j].x, trails[i][j].y);
+                    }
+                    p.endShape();
+                    
+                    // Draw pendulum
+                    p.stroke(200, 50);
+                    p.line(pendulum.x, pendulum.y, pendulum.bobX, pendulum.bobY);
+                    
+                    // Draw bob with glow effect
+                    p.noStroke();
+                    for (let r = 20; r > 0; r -= 2) {
+                        const alpha = p.map(r, 20, 0, 0.1, 0.8);
+                        p.fill(colors[i]._getHue(), colors[i]._getSaturation(), colors[i]._getBrightness(), alpha);
+                        p.circle(pendulum.bobX, pendulum.bobY, r);
+                    }
+                }
+                
+                // Draw info
+                p.fill(255);
+                p.noStroke();
+                p.textSize(14);
+                p.text("Drag mouse to influence pendulums", 20, 30);
+            };
+
+            p.windowResized = () => {
+                p.resizeCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800));
+                initializePendulums();
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
